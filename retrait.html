@@ -1,0 +1,430 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Demande de Congé</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .form-container {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .column {
+      flex: 1;
+      min-width: 300px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+
+    .error-message {
+      color: #a94442;
+      font-size: 0.9em;
+      margin-top: 3px;
+    }
+
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    .cin-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .cin-group input {
+      flex: 1;
+    }
+
+    .cin-group button {
+      width: auto;
+      padding: 8px 12px;
+    }
+
+    #result {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+
+    .success {
+      background-color: #dff0d8;
+      color: #3c763d;
+    }
+
+    .error {
+      background-color: #f2dede;
+      color: #a94442;
+    }
+
+    table {
+      margin-top: 20px;
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .has-error {
+      border: 1px solid #a94442;
+    }
+
+    @media (max-width: 768px) {
+      .form-container {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Demande de Congé</h1>
+
+  <div class="cin-group">
+    <input type="text" id="cin" placeholder="Entrez le CIN (ex: AA123456)" required>
+    <button id="searchBtn">Rechercher</button>
+  </div>
+  <div id="error-cin" class="error-message"></div>
+
+  <form id="leaveForm">
+    <div class="form-container">
+      <!-- Colonne 1 -->
+      <div class="column">
+        <div class="form-group">
+          <label for="nom">Nom:</label>
+          <input type="text" id="nom" readonly />
+        </div>
+
+        <div class="form-group">
+          <label for="prenom">Prénom:</label>
+          <input type="text" id="prenom" readonly />
+        </div>
+ 
+        <div class="form-group">
+          <label for="nb_jours">Nombre de Jours:</label>
+          <input type="number" id="nb_jours" required />
+          <div id="error-nb-jours" class="error-message"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="date_debut">Date Début:</label>
+          <input type="date" id="date_debut" required />
+          <div id="error-date-debut" class="error-message"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="date_fin">Date Fin:</label>
+          <input type="date" id="date_fin" required />
+          <div id="error-date-fin" class="error-message"></div>
+        </div>
+      </div>
+
+      <!-- Colonne 2 -->
+      <div class="column">
+        <div class="form-group">
+          <label for="date_conge">Date de création de la demande:</label>
+          <input type="date" id="date_conge" required min="2020-01-01" max="2030-12-31" />
+          <div id="error-date-conge" class="error-message"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="annee">Année:</label>
+          <input type="number" id="annee" required />
+          <div id="error-annee" class="error-message"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="commentaire">Commentaire:</label>
+          <textarea id="commentaire" rows="3"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit">Envoyer la Demande</button>
+  </form>
+
+  <div id="result"></div>
+
+  <h2>Solde des congés (<?= $annee_prev . '/' . $annee ?>)</h2>
+  <div id="table-solde"></div>
+
+  <script>
+
+    let currentEmployeeId = null;
+    let soldeDejaAffiche = false;
+
+    window.addEventListener('load', () => {
+      document.getElementById('leaveForm').reset();
+      document.getElementById('nom').value = '';
+      document.getElementById('prenom').value = '';
+      document.getElementById('result').textContent = '';
+      document.getElementById('result').className = '';
+      document.getElementById('table-solde').innerHTML = '';
+      currentEmployeeId = null;
+      soldeDejaAffiche = false;
+      clearErrors();
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+      document.getElementById('searchBtn').addEventListener('click', searchEmployee);
+      document.getElementById('leaveForm').addEventListener('submit', submitLeaveRequest);
+      document.getElementById('nb_jours').addEventListener('focus', afficherSoldeDeuxAnnees);
+      document.getElementById('date_debut').addEventListener('change', verifierDates);
+      document.getElementById('date_fin').addEventListener('change', verifierDates);
+
+      document.getElementById('date_conge').addEventListener('change', function () {
+        const dateValue = this.value;
+        if (dateValue) {
+          const annee = new Date(dateValue).getFullYear();
+          document.getElementById('annee').value = annee;
+        }
+      });
+    });
+
+    function verifierDates() {
+      const debut = document.getElementById('date_debut').value;
+      const fin = document.getElementById('date_fin').value;
+      const errorFin = document.getElementById('error-date-fin');
+
+      if (debut && fin && fin <= debut) {
+        errorFin.textContent = "La date de fin doit être postérieure à la date de début.";
+        document.getElementById('date_fin').classList.add('has-error');
+      } else {
+        errorFin.textContent = "";
+        document.getElementById('date_fin').classList.remove('has-error');
+      }
+    }
+
+    function clearErrors() {
+      document.querySelectorAll('.error-message').forEach(el => el.textContent = '');
+      document.querySelectorAll('input').forEach(el => el.classList.remove('has-error'));
+    }
+
+    function showError(fieldId, message) {
+      const errorElement = document.getElementById(`error-${fieldId}`);
+      const inputElement = document.getElementById(fieldId);
+
+      errorElement.textContent = message;
+      inputElement.classList.add('has-error');
+    }
+
+    async function searchEmployee() {
+      const cin = document.getElementById('cin').value.trim();
+      const errorElement = document.getElementById('error-cin');
+
+      if (!cin) {
+        errorElement.textContent = 'Veuillez entrer un CIN';
+        document.getElementById('cin').classList.add('has-error');
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost/gestion_conges/backend/get_employee.php?cin=${encodeURIComponent(cin)}`);
+        const data = await response.json();
+
+        if (data.success) {
+          document.getElementById('nom').value = data.nom;
+          document.getElementById('prenom').value = data.prenom;
+          currentEmployeeId = data.id;
+          errorElement.textContent = '';
+          document.getElementById('cin').classList.remove('has-error');
+          showResult('Employé trouvé: ' + data.prenom + ' ' + data.nom, 'success');
+        } else {
+          errorElement.textContent = data.message || 'Employé non trouvé';
+          document.getElementById('cin').classList.add('has-error');
+          showResult('', '');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        errorElement.textContent = 'Erreur technique - voir console (F12)';
+        document.getElementById('cin').classList.add('has-error');
+      }
+    }
+
+    async function submitLeaveRequest(e) {
+      e.preventDefault();
+      clearErrors();
+
+      let hasError = false;
+
+      if (!currentEmployeeId) {
+        const cin = document.getElementById('cin').value.trim();
+        showError('cin', cin ? 'Employé non trouvé, veuillez vérifier le CIN' : 'Veuillez entrer un CIN');
+        hasError = true;
+      }
+
+      const dateDebut = document.getElementById('date_debut').value;
+      const dateFin = document.getElementById('date_fin').value;
+      const dateConge = document.getElementById('date_conge').value;
+      const annee = document.getElementById('annee').value;
+      const nbJours = document.getElementById('nb_jours').value;
+
+      if (!dateDebut) { showError('date-debut', 'Veuillez choisir une date de début'); hasError = true; }
+      if (!dateFin) { showError('date-fin', 'Veuillez choisir une date de fin'); hasError = true; }
+      else if (dateFin <= dateDebut) { showError('date-fin', 'La date de fin doit être après la date de début'); hasError = true; }
+
+      if (!dateConge) { showError('date-conge', 'Veuillez choisir une date de création'); hasError = true; }
+      if (!annee) { showError('annee', 'Veuillez entrer une année'); hasError = true; }
+      if (!nbJours || nbJours <= 0) { showError('nb-jours', 'Veuillez entrer un nombre de jours valide'); hasError = true; }
+
+      if (hasError) {
+        showResult('Veuillez corriger les erreurs dans le formulaire', 'error');
+        return;
+      }
+
+      const leaveData = {
+        id_employe: currentEmployeeId,
+        date_debut: dateDebut,
+        date_fin: dateFin,
+        date_conge: dateConge,
+        annee: annee,
+        nb_jours: nbJours,
+        commentaire: document.getElementById('commentaire').value
+      };
+
+      try {
+        const response = await fetch('http://localhost/gestion_conges/backend/enregistrer_conge.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leaveData)
+        });
+
+        const data = await response.json();
+        showResult(data.message, data.success ? 'success' : 'error');
+
+        if (data.success) {
+          document.getElementById('leaveForm').reset();
+          document.getElementById('nom').value = '';
+          document.getElementById('prenom').value = '';
+          currentEmployeeId = null;
+          soldeDejaAffiche = false;
+          document.getElementById('table-solde').innerHTML = '';
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        showResult('Erreur lors de l\'envoi de la demande', 'error');
+      }
+    }
+
+    function showResult(message, type) {
+      const resultDiv = document.getElementById('result');
+      resultDiv.textContent = message;
+      resultDiv.className = type;
+    }
+
+    async function afficherSoldeDeuxAnnees() {
+  if (soldeDejaAffiche || !currentEmployeeId) return;
+  soldeDejaAffiche = true;
+
+  const cin = document.getElementById('cin').value.trim();
+  const joursAutorises = 22;
+  const anneeActuelle = new Date().getFullYear();
+
+  try {
+    const response = await fetch(`http://localhost/gestion_conges/backend/verifie_solde.php?cin=${encodeURIComponent(cin)}`);
+    const data = await response.json();
+
+    if (!data.success) {
+      alert(data.message || "Erreur lors de la récupération du solde.");
+      return;
+    }
+
+    const nom = data.nom;
+    const prenom = data.prenom;
+    const utilise2024 = data.utilise2024;
+    const restant2024 = data.reste2024;
+
+    let html = `<p><strong>Employé :</strong> ${prenom} ${nom}</p>`;
+    html += "<table><thead><tr><th>Année</th><th>Jours autorisés</th><th>Jours utilisés</th><th>Solde restant</th></tr></thead><tbody>";
+    html += `<tr><td>2024</td><td>${joursAutorises}</td><td>${utilise2024}</td><td>${restant2024}</td></tr>`;
+
+    let utilise2025 = 0;
+    let restant2025 = joursAutorises;
+    let totalDemandes = 0;
+
+    if (restant2024 === 0) {
+      alert("⚠ Vous avez déjà utilisé les 22 jours de .$annee_prev La demande sera comptée sur 2025.");
+      const joursUtilises2025 = parseInt(prompt(`Combien de jours voulez-vous utiliser de 2025 ? (max ${joursAutorises})`) || "0");
+      utilise2025 = Math.min(joursUtilises2025, joursAutorises);
+      restant2025 -= utilise2025;
+      totalDemandes = utilise2025;
+      html += `<tr><td>2025</td><td>${joursAutorises}</td><td>${utilise2025}</td><td>${restant2025}</td></tr>`;
+    } else {
+      alert(`✅ Il vous reste ${restant2024} jour(s) sur 2024.`);
+      const choix = confirm(`Souhaitez-vous utiliser plus de ${restant2024} jours ? (Cela utilisera aussi 2025)`);
+      if (choix) {
+        const joursDemandes = parseInt(prompt(`Combien de jours voulez-vous demander au total ?`) || "0");
+        if (joursDemandes <= restant2024) {
+          totalDemandes = joursDemandes;
+        } else {
+          utilise2025 = joursDemandes - restant2024;
+          totalDemandes = joursDemandes;
+          restant2025 -= utilise2025;
+          html += `<tr><td>2025</td><td>${joursAutorises}</td><td>${utilise2025}</td><td>${restant2025}</td></tr>`;
+        }
+      } else {
+        totalDemandes = restant2024;
+      }
+    }
+
+    const soldeRestantTotal = restant2024 + restant2025;
+    html += "</tbody></table>";
+    html += `<p><strong>Total demandé : ${totalDemandes} jours</strong></p>`;
+    html += `<p><strong>Solde restant total (2024 + 2025) : ${soldeRestantTotal} jours</strong></p>`;
+
+    document.getElementById("nb_jours").value = totalDemandes;
+    document.getElementById("annee").value = anneeActuelle;
+    document.getElementById("table-solde").innerHTML = html;
+
+  } catch (error) {
+    console.error("Erreur AJAX :", error);
+    alert("Erreur technique lors de la vérification du solde.");
+  }
+}
+
+  </script>
+</body>
+</html>
